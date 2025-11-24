@@ -13,7 +13,7 @@ require (
 	github.com/nextmn/logrus-formatter v0.0.1
 	github.com/nextmn/rfc9433 v0.0.2
 	github.com/sirupsen/logrus v1.9.3
-	github.com/urfave/cli/v2 v2.27.6
+	github.com/urfave/cli/v2 v2.27.7
 	github.com/wmnsk/go-pfcp v0.0.24
 	gopkg.in/yaml.v3 v3.0.1
 )
