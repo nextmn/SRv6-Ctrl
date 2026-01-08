@@ -11,7 +11,7 @@ Simply run `make build` and `make install`.
 
 
 ## Author
-Louis Royer
+Louis Royer and the NextMN Contributors
 
 ## License
 MIT
