@@ -5,9 +5,9 @@ go 1.25.5
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/gin-gonic/gin v1.11.0
-	github.com/gofrs/uuid v4.4.0+incompatible
+	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/nextmn/go-pfcp-networking v0.0.42
-	github.com/nextmn/json-api v0.0.19
+	github.com/nextmn/json-api v0.1.0
 	github.com/nextmn/logrus-formatter v0.0.1
 	github.com/nextmn/rfc9433 v0.0.3
 	github.com/sirupsen/logrus v1.9.3
