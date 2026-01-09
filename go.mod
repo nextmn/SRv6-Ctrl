@@ -8,7 +8,7 @@ require (
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/nextmn/go-pfcp-networking v0.0.42
 	github.com/nextmn/json-api v0.1.0
-	github.com/nextmn/logrus-formatter v0.0.1
+	github.com/nextmn/logrus-formatter v0.0.2
 	github.com/nextmn/rfc9433 v0.0.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/urfave/cli/v2 v2.27.7
