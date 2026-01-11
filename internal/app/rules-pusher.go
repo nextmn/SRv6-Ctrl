@@ -82,7 +82,7 @@ func (pusher *RulesPusher) pushUpdateAction(ctx context.Context, client http.Cli
 	resp, err := client.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("Could not push update action: server not responding")
-		return fmt.Errorf("Could not push update action: server not responding")
+		return fmt.Errorf("could not push update action: server not responding")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
@@ -105,7 +105,7 @@ func (pusher *RulesPusher) pushSingleRule(ctx context.Context, client http.Clien
 	resp, err := client.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("Could not push rules: server not responding")
-		return nil, fmt.Errorf("Could not push rules: server not responding")
+		return nil, fmt.Errorf("could not push rules: server not responding")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 400 {
@@ -122,7 +122,7 @@ func (pusher *RulesPusher) pushSingleRule(ctx context.Context, client http.Clien
 		}
 		return uri.ResolveReference(uloc), nil
 	}
-	return nil, fmt.Errorf("No Location provided")
+	return nil, fmt.Errorf("no Location provided")
 }
 
 func gnbInArea(gnb netip.Addr, area []netip.Prefix) bool {
@@ -247,7 +247,7 @@ func (pusher *RulesPusher) pushHandoverAcrossAreas(ctx context.Context, ue_ip st
 		}
 		if len(r.SegmentsList) == 0 {
 			logrus.Error("Empty segments list for downlink")
-			return fmt.Errorf("Empty segments list for downlink")
+			return fmt.Errorf("empty segments list for downlink")
 		}
 		segList := make([]string, len(r.SegmentsList))
 		copy(segList, r.SegmentsList)
@@ -431,7 +431,7 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 		}
 		if len(r.SegmentsList) == 0 {
 			logrus.Error("Empty segments list for downlink")
-			return fmt.Errorf("Empty segments list for downlink")
+			return fmt.Errorf("empty segments list for downlink")
 		}
 		segList := make([]string, len(r.SegmentsList))
 		copy(segList, r.SegmentsList)

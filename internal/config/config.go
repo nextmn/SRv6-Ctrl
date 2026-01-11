@@ -6,8 +6,8 @@
 package config
 
 import (
-	"io/ioutil"
 	"net/netip"
+	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
@@ -19,7 +19,7 @@ func ParseConf(file string) (*CtrlConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	yamlFile, err := ioutil.ReadFile(path)
+	yamlFile, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

@@ -37,13 +37,11 @@ func (s Setup) Run(ctx context.Context) error {
 	if err := s.HTTPServer.Start(ctx); err != nil {
 		return err
 	}
-	select {
-	case <-ctx.Done():
-		ctxShutdown, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
-		// Try to end before 1s…
-		s.HTTPServer.WaitShutdown(ctxShutdown)
-		s.Upf.WaitShutdown(ctxShutdown)
-	}
+	<-ctx.Done()
+	ctxShutdown, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	// Try to end before 1s…
+	s.HTTPServer.WaitShutdown(ctxShutdown)
+	s.Upf.WaitShutdown(ctxShutdown)
 	return nil
 }

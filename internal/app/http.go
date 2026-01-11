@@ -72,13 +72,11 @@ func (e *HttpServerEntity) Start(ctx context.Context) error {
 	}(l)
 	go func(ctx context.Context) {
 		defer close(e.closed)
-		select {
-		case <-ctx.Done():
-			ctxShutdown, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-			if err := e.srv.Shutdown(ctxShutdown); err != nil {
-				logrus.WithError(err).Info("HTTP Server Shutdown")
-			}
+		<-ctx.Done()
+		ctxShutdown, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		if err := e.srv.Shutdown(ctxShutdown); err != nil {
+			logrus.WithError(err).Info("HTTP Server Shutdown")
 		}
 	}(ctx)
 	return nil
