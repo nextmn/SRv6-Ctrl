@@ -17,6 +17,7 @@ import (
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	"github.com/nextmn/json-api/healthcheck"
 	"github.com/nextmn/json-api/jsonapi/n4tosrv6"
+	"github.com/nextmn/logrus-formatter/ginlogger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid/v5"
@@ -40,8 +41,10 @@ func NewHttpServerEntity(httpAddr netip.AddrPort, pfcp *pfcp_networking.PFCPEnti
 		routers: make(n4tosrv6.RouterMap),
 		pfcpSrv: pfcp,
 	}
-	// TODO: gin.SetMode(gin.DebugMode) / gin.SetMode(gin.ReleaseMode) depending on log level
-	r := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(ginlogger.LoggingMiddleware)
 	r.GET("/status", rr.Status)
 	r.GET("/routers", rr.GetRouters)
 	r.GET("/routers/:uuid", rr.GetRouter)
