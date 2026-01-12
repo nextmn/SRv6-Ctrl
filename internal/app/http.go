@@ -42,9 +42,7 @@ func NewHttpServerEntity(httpAddr netip.AddrPort, pfcp *pfcp_networking.PFCPEnti
 		pfcpSrv: pfcp,
 	}
 	gin.SetMode(gin.ReleaseMode)
-	r := gin.New()
-	r.Use(gin.Recovery())
-	r.Use(ginlogger.LoggingMiddleware)
+	r := ginlogger.Default()
 	r.GET("/status", rr.Status)
 	r.GET("/routers", rr.GetRouters)
 	r.GET("/routers/:uuid", rr.GetRouter)
@@ -76,10 +74,10 @@ func (e *HttpServerEntity) Start(ctx context.Context) error {
 	go func(ctx context.Context) {
 		defer close(e.closed)
 		<-ctx.Done()
-		ctxShutdown, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		ctxShutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 100*time.Millisecond)
 		defer cancel()
-		if err := e.srv.Shutdown(ctxShutdown); err != nil {
-			logrus.WithError(err).Info("HTTP Server Shutdown")
+		if err := e.srv.Shutdown(ctxShutdown); err == nil {
+			logrus.Info("HTTP Server Shutdown")
 		}
 	}(ctx)
 	return nil

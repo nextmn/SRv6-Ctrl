@@ -28,6 +28,12 @@ func NewSetup(conf *config.CtrlConfig) Setup {
 }
 
 func (s Setup) Run(ctx context.Context) error {
+	defer func() {
+		ctxShutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 1*time.Second)
+		defer cancel()
+		s.HTTPServer.WaitShutdown(ctxShutdown)
+		s.Upf.WaitShutdown(ctxShutdown)
+	}()
 	if err := s.Upf.PFCPServerAddHooks(s.RulesPusher); err != nil {
 		return err
 	}
@@ -38,10 +44,5 @@ func (s Setup) Run(ctx context.Context) error {
 		return err
 	}
 	<-ctx.Done()
-	ctxShutdown, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	// Try to end before 1s…
-	s.HTTPServer.WaitShutdown(ctxShutdown)
-	s.Upf.WaitShutdown(ctxShutdown)
 	return nil
 }
