@@ -10,10 +10,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"sync"
+	"time"
 
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	pfcpapi "github.com/nextmn/go-pfcp-networking/pfcp/api"
@@ -34,6 +36,7 @@ type RulesPusher struct {
 	uplink   []config.Rule
 	downlink []config.Rule
 	ues      sync.Map
+	client   *http.Client
 }
 
 type RuleAction struct {
@@ -64,14 +67,24 @@ type ueInfos struct {
 }
 
 func NewRulesPusher(config *config.CtrlConfig) *RulesPusher {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.DialContext = (&net.Dialer{
+		// Force using south interface IP Address
+		LocalAddr: &net.TCPAddr{IP: config.Control.BindAddr.Addr().AsSlice()},
+		// Same parameters as http.DefaultTransport's Dialer
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).DialContext
+
 	return &RulesPusher{
 		uplink:   config.Uplink,
 		downlink: config.Downlink,
 		ues:      sync.Map{},
+		client:   &http.Client{Transport: t},
 	}
 }
 
-func (pusher *RulesPusher) pushUpdateAction(ctx context.Context, client http.Client, url *url.URL, data []byte) error {
+func (pusher *RulesPusher) pushUpdateAction(ctx context.Context, url *url.URL, data []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url.String(), bytes.NewBuffer(data))
 	if err != nil {
 		logrus.WithError(err).Error("could not create http request")
@@ -79,7 +92,7 @@ func (pusher *RulesPusher) pushUpdateAction(ctx context.Context, client http.Cli
 	}
 	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	resp, err := client.Do(req)
+	resp, err := pusher.client.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("Could not push update action: server not responding")
 		return fmt.Errorf("could not push update action: server not responding")
@@ -94,7 +107,7 @@ func (pusher *RulesPusher) pushUpdateAction(ctx context.Context, client http.Cli
 	}
 	return nil
 }
-func (pusher *RulesPusher) pushSingleRule(ctx context.Context, client http.Client, uri jsonapi.ControlURI, data []byte) (*url.URL, error) {
+func (pusher *RulesPusher) pushSingleRule(ctx context.Context, uri jsonapi.ControlURI, data []byte) (*url.URL, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uri.JoinPath("rules").String(), bytes.NewBuffer(data))
 	if err != nil {
 		logrus.WithError(err).Error("could not create http request")
@@ -102,7 +115,7 @@ func (pusher *RulesPusher) pushSingleRule(ctx context.Context, client http.Clien
 	}
 	req.Header.Add("User-Agent", UserAgent)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	resp, err := client.Do(req)
+	resp, err := pusher.client.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("Could not push rules: server not responding")
 		return nil, fmt.Errorf("could not push rules: server not responding")
@@ -156,7 +169,6 @@ func (pusher *RulesPusher) pushHandoverAcrossAreas(ctx context.Context, ue_ip st
 	if err != nil {
 		return err
 	}
-	client := http.Client{}
 	logrus.WithFields(logrus.Fields{
 		"dl-teid": infos.HandoverInfos.DlTargetGnb.Teid,
 		"dl-addr": infos.HandoverInfos.DlTargetGnb.Addr,
@@ -220,7 +232,7 @@ func (pusher *RulesPusher) pushHandoverAcrossAreas(ctx context.Context, ue_ip st
 			defer wg.Done()
 			//infos.SRGWLock.Lock()
 			//defer infos.SRGWLock.Unlock()
-			_, _ = pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			_, _ = pusher.pushSingleRule(ctx, r.ControlURI, rule_json)
 			// TODO: store this (after old rules are removed)
 			//if err == nil {
 			//	infos.SRGWRules = append(infos.SRGWRules, &RuleAction{
@@ -300,7 +312,7 @@ func (pusher *RulesPusher) pushHandoverAcrossAreas(ctx context.Context, ue_ip st
 			defer wg.Done()
 			//infos.AnchorsLock.Lock()
 			//defer infos.AnchorsLock.Unlock()
-			_, _ = pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			_, _ = pusher.pushSingleRule(ctx, r.ControlURI, rule_json)
 			// TODO: store this (after old rules are removed)
 			//if err == nil {
 			//	infos.AnchorsRules = append(infos.AnchorsRules, &RuleAction{
@@ -349,7 +361,6 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 		return err
 	}
 
-	client := http.Client{}
 	var wg sync.WaitGroup
 
 	for _, r := range pusher.uplink {
@@ -405,7 +416,7 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 			defer wg.Done()
 			infos.SRGWLock.Lock()
 			defer infos.SRGWLock.Unlock()
-			url, err := pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			url, err := pusher.pushSingleRule(ctx, r.ControlURI, rule_json)
 			if err == nil {
 				infos.SRGWRules = append(infos.SRGWRules, &RuleAction{
 					Url:    url,
@@ -483,7 +494,7 @@ func (pusher *RulesPusher) pushRTRRule(ctx context.Context, ue_ip string) error 
 			defer wg.Done()
 			infos.AnchorsLock.Lock()
 			defer infos.AnchorsLock.Unlock()
-			url, err := pusher.pushSingleRule(ctx, client, r.ControlURI, rule_json)
+			url, err := pusher.pushSingleRule(ctx, r.ControlURI, rule_json)
 			if err == nil {
 				infos.AnchorsRules = append(infos.AnchorsRules, &RuleAction{
 					Url:          url,
@@ -510,7 +521,6 @@ func (pusher *RulesPusher) pushHandover(ctx context.Context, ue_ip string, hando
 	infos.Lock()
 	defer infos.Unlock()
 
-	client := http.Client{}
 	var wg sync.WaitGroup
 
 	infos.AnchorsLock.RLock()
@@ -549,7 +559,7 @@ func (pusher *RulesPusher) pushHandover(ctx context.Context, ue_ip string, hando
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
-			err := pusher.pushUpdateAction(ctx, client, r.Url.JoinPath("update-action"), action_json)
+			err := pusher.pushUpdateAction(ctx, r.Url.JoinPath("update-action"), action_json)
 			if err != nil {
 				logrus.WithError(err).Error("Could not push update action")
 			} else {
