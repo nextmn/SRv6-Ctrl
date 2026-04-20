@@ -837,8 +837,25 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 			"addr-uplink":   ue.(*ueInfos).UplinkFTeid.Addr,
 		}).Debug("PushRTRRule")
 		wg.Go(func() {
-			pusher.pushRTRRule(ctx, ip.(string))
-			pusher.pushHandoverAcrossAreas(ctx, ip.(string))
+			if err := pusher.pushRTRRule(ctx, ip.(string)); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"ue-ipv4":       ip,
+					"gnb-ipv4":      ue.(*ueInfos).Gnb,
+					"teid-downlink": ue.(*ueInfos).DownlinkTeid,
+					"teid-uplink":   ue.(*ueInfos).UplinkFTeid.Teid,
+					"addr-uplink":   ue.(*ueInfos).UplinkFTeid.Addr,
+				}).Debug("Error while pushing router rule")
+			}
+			if err := pusher.pushHandoverAcrossAreas(ctx, ip.(string)); err != nil {
+				logrus.WithError(err).WithFields(logrus.Fields{
+					"ue-ipv4":       ip,
+					"gnb-ipv4":      ue.(*ueInfos).Gnb,
+					"teid-downlink": ue.(*ueInfos).DownlinkTeid,
+					"teid-uplink":   ue.(*ueInfos).UplinkFTeid.Teid,
+					"addr-uplink":   ue.(*ueInfos).UplinkFTeid.Addr,
+				}).Debug("Error while pushing \"handover across areas\" rule")
+			}
+
 			// TODO: check pushRTRRule return code and send pfcp error on failure
 		})
 		return true
