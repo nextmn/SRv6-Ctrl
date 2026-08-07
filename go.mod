@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/gin-gonic/gin v1.12.0
-	github.com/gofrs/uuid/v5 v5.4.0
+	github.com/gofrs/uuid/v5 v5.5.1
 	github.com/nextmn/cli-xdg v0.0.1
 	github.com/nextmn/go-pfcp-networking v0.0.43-0.20260111201636-7b8fe7a6c0d1
 	github.com/nextmn/json-api v0.1.1
