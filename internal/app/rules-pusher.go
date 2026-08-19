@@ -826,13 +826,11 @@ func (pusher *RulesPusher) updateRoutersRules(ctx context.Context, msgType pfcpu
 			"teid-uplink":   ue.(*ueInfos).UplinkFTeid.Teid,
 			"addr-uplink":   ue.(*ueInfos).UplinkFTeid.Addr,
 		}).Debug("PushRTRRule")
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			pusher.pushRTRRule(ctx, ip.(string))
 			pusher.pushHandoverAcrossAreas(ctx, ip.(string))
 			// TODO: check pushRTRRule return code and send pfcp error on failure
-		}()
+		})
 		return true
 	})
 	wg.Wait()
