@@ -8,7 +8,7 @@ require (
 	github.com/nextmn/cli-xdg v0.0.1
 	github.com/nextmn/go-pfcp-networking v0.0.43-0.20260111201636-7b8fe7a6c0d1
 	github.com/nextmn/json-api v0.1.1
-	github.com/nextmn/logrus-formatter v0.2.3
+	github.com/nextmn/logrus-formatter v0.2.4
 	github.com/nextmn/rfc9433 v0.0.4
 	github.com/sirupsen/logrus v1.10.1
 	github.com/urfave/cli/v3 v3.11.0
