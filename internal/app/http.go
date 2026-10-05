@@ -7,6 +7,7 @@ package app
 
 import (
 	"context"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"net/http"
@@ -16,10 +17,10 @@ import (
 
 	pfcp_networking "github.com/nextmn/go-pfcp-networking/pfcp"
 	"github.com/nextmn/json-api/healthcheck"
+	"github.com/nextmn/json-api/jsonapi"
 	"github.com/nextmn/json-api/jsonapi/n4tosrv6"
-	"github.com/nextmn/logrus-formatter/ginlogger"
+	"github.com/nextmn/logrus-formatter/httplog"
 
-	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid/v5"
 	"github.com/sirupsen/logrus"
 )
@@ -41,19 +42,19 @@ func NewHttpServerEntity(httpAddr netip.AddrPort, pfcp *pfcp_networking.PFCPEnti
 		routers: make(n4tosrv6.RouterMap),
 		pfcpSrv: pfcp,
 	}
-	gin.SetMode(gin.ReleaseMode)
-	r := ginlogger.Default()
-	r.GET("/status", rr.Status)
-	r.GET("/routers", rr.GetRouters)
-	r.GET("/routers/:uuid", rr.GetRouter)
-	r.DELETE("/routers/:uuid", rr.DeleteRouter)
-	r.POST("/routers", rr.PostRouter)
+	h := http.NewServeMux()
+	h.HandleFunc("GET /status", rr.Status)
+	h.HandleFunc("GET /routers", rr.GetRouters)
+	h.HandleFunc("GET /routers/{uuid}", rr.GetRouter)
+	h.HandleFunc("DELETE /routers/{uuid}", rr.DeleteRouter)
+	h.HandleFunc("POST /routers", rr.PostRouter)
+	logger := httplog.NewRequestLoggerMiddleware(h)
 	logrus.WithFields(logrus.Fields{"http-addr": httpAddr}).Info("HTTP Server created")
 	e := HttpServerEntity{
 		routers: &rr,
 		srv: &http.Server{
 			Addr:    httpAddr.String(),
-			Handler: r,
+			Handler: logger,
 		},
 		closed: make(chan struct{}),
 	}
@@ -93,91 +94,120 @@ func (e *HttpServerEntity) WaitShutdown(ctx context.Context) error {
 }
 
 // get status of the controller
-func (l *RouterRegistry) Status(c *gin.Context) {
-	ready := false
-	if (l.pfcpSrv != nil) && (l.pfcpSrv.RecoveryTimeStamp() != nil) {
-		ready = true
-	}
+func (l *RouterRegistry) Status(w http.ResponseWriter, req *http.Request) {
 	status := healthcheck.Status{
-		Ready: ready,
+		Ready: (l.pfcpSrv != nil) && (l.pfcpSrv.RecoveryTimeStamp() != nil),
 	}
-	c.Header("Cache-Control", "no-cache")
-	c.JSON(http.StatusOK, status)
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	json.MarshalWrite(w, status)
 }
 
 // get a router infos
-func (r *RouterRegistry) GetRouter(c *gin.Context) {
-	id := c.Param("uuid")
+func (r *RouterRegistry) GetRouter(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	id := req.PathValue("uuid")
+	// TODO: migrate from "gofrs/uuid" to native "uuid"
+	// ==== old ====
 	idUuid, err := uuid.FromString(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "bad uuid", "error": fmt.Sprintf("%v", err)})
+		w.WriteHeader(http.StatusBadRequest)
+		json.MarshalWrite(w, jsonapi.MessageWithError{Message: "bad uuid", Error: err})
 		return
 	}
-	c.Header("Cache-Control", "no-cache")
+	// ==== new ====
+	// idUuid := uuid.Parse(id)
 	r.RLock()
 	defer r.RUnlock()
 	if val, ok := r.routers[idUuid]; ok {
-		c.JSON(http.StatusOK, val)
+		w.WriteHeader(http.StatusOK)
+		json.MarshalWrite(w, val)
 		return
 	}
-	c.JSON(http.StatusNotFound, gin.H{"message": "router not found"})
+	w.WriteHeader(http.StatusNotFound)
+	json.MarshalWrite(w, jsonapi.Message{Message: "router not found"})
 }
 
 // post a router infos
-func (r *RouterRegistry) PostRouter(c *gin.Context) {
+func (r *RouterRegistry) PostRouter(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	var router n4tosrv6.Router
-	if err := c.BindJSON(&router); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "could not deserialize", "error": fmt.Sprintf("%v", err)})
+	if err := json.UnmarshalRead(req.Body, &router); err != nil {
+		logrus.WithError(err).Error("could not deserialize")
+		w.WriteHeader(http.StatusBadRequest)
+		json.MarshalWrite(w, jsonapi.MessageWithError{Message: "could not deserialize", Error: err})
 		return
 	}
-	c.Header("Cache-Control", "no-cache")
 	r.Lock()
 	defer r.Unlock()
 	for k, v := range r.routers {
 		if router.Locator.Overlaps(v.Locator) {
-			c.JSON(http.StatusConflict, gin.H{"message": "This locator overlaps with locator of router " + k.String()})
+			w.WriteHeader(http.StatusConflict)
+			json.MarshalWrite(w, jsonapi.Message{Message: "this locator overlaps with locator of router " + k.String()})
 			return
 		}
 	}
 
+	// TODO: migrate from "gofrs/uuid" to native "uuid"
+	// ==== old =====
 	id, err := uuid.NewV4()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to generate UUID"})
+		w.WriteHeader(http.StatusInternalServerError)
+		json.MarshalWrite(w, jsonapi.Message{Message: "failed to generate UUID"})
 	}
+	// ==== new ====
+	// id : =uuid.NewV4()
 	for {
+		// FIXME: add a context to not block the server when the pool is almost full (this would give a chance to delete old items)
+		//        maybe with a retry count rather than a timeout (3 would probably be enough)
 		if _, exists := r.routers[id]; !exists {
 			break
 		} else {
+			// TODO: migrate from "gofrs/uuid" to native "uuid"
+			// ==== old =====
 			id, err = uuid.NewV4()
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to generate UUID"})
+				w.WriteHeader(http.StatusInternalServerError)
+				json.MarshalWrite(w, jsonapi.Message{Message: "failed to generate UUID"})
 			}
+			// ==== new ====
+			// id : =uuid.NewV4()
 		}
 	}
 	r.routers[id] = router
-	c.Header("Location", fmt.Sprintf("/routers/%s", id))
-	c.JSON(http.StatusCreated, r.routers[id])
+	w.Header().Set("Location", fmt.Sprintf("/routers/%s", id))
+	w.WriteHeader(http.StatusCreated)
+	json.MarshalWrite(w, r.routers[id])
 }
 
-func (r *RouterRegistry) DeleteRouter(c *gin.Context) {
-	id := c.Param("uuid")
+func (r *RouterRegistry) DeleteRouter(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	id := req.PathValue("uuid")
 	idUuid, err := uuid.FromString(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "bad uuid", "error": fmt.Sprintf("%v", err)})
+		w.WriteHeader(http.StatusBadRequest)
+		json.MarshalWrite(w, jsonapi.MessageWithError{Message: "bad uuid", Error: err})
 		return
 	}
-	c.Header("Cache-Control", "no-cache")
 	r.Lock()
 	defer r.Unlock()
 	if _, exists := r.routers[idUuid]; !exists {
-		c.JSON(http.StatusNotFound, gin.H{"message": "router not found"})
+		w.WriteHeader(http.StatusNotFound)
+		json.MarshalWrite(w, jsonapi.Message{Message: "router not found"})
 		return
 	}
 
 	delete(r.routers, idUuid)
-	c.Status(http.StatusNoContent) // successful deletion
+	w.WriteHeader(http.StatusNoContent) // successful deletion
 }
 
-func (r *RouterRegistry) GetRouters(c *gin.Context) {
-	c.JSON(http.StatusOK, r.routers)
+func (r *RouterRegistry) GetRouters(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	json.MarshalWrite(w, r.routers)
 }
