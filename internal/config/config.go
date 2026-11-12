@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 func ParseConf(file string) (*CtrlConfig, error) {
@@ -23,7 +23,7 @@ func ParseConf(file string) (*CtrlConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = yaml.Unmarshal(yamlFile, &conf); err != nil {
+	if err = yaml.Load(yamlFile, &conf); err != nil {
 		return nil, err
 	}
 	return &conf, nil
